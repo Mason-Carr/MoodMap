@@ -1,0 +1,21 @@
+# report + generator
+MoodMap_Report.docx
+src/generate_report.py
+
+# claude
+.claude/
+
+# artist lookup files (generated, not needed in repo)
+all_artists.txt
+top_artists.txt
+modern_artists.txt
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# env
+.env
+*.egg-info/
