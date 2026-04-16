@@ -72,6 +72,8 @@
   .bar-bg { flex: 1; height: 8px; background: #eee; border-radius: 4px; }
   .bar-fill { height: 100%; background: #333; border-radius: 4px; transition: width 0.3s; }
   .bar-row .bpct { width: 30px; text-align: right; color: #888; }
+
+  canvas { display: block; margin: 20px auto 0; }
 </style>
 </head>
 <body>
@@ -109,14 +111,29 @@
   <input type="range" id="s_liveness" min="0" max="1" step="0.01" value="0.20">
 </div>
 
+<div class="slider-row">
+  <label>Instrumentalness <span id="v_instrumentalness">0.17</span></label>
+  <input type="range" id="s_instrumentalness" min="0" max="1" step="0.01" value="0.17">
+</div>
+
+<div class="slider-row">
+  <label>Tempo (BPM) <span id="v_tempo">118</span></label>
+  <input type="range" id="s_tempo" min="40" max="220" step="1" value="118">
+</div>
+
+<div class="slider-row">
+  <label>Loudness (dB) <span id="v_loudness">-10</span></label>
+  <input type="range" id="s_loudness" min="-60" max="0" step="0.5" value="-10">
+</div>
+
 <div class="presets">
   <strong style="width:100%; font-size:0.82rem; color:#888;">Try a song:</strong>
-  <button onclick="load({energy:0.92,danceability:0.50,valence:0.44,acousticness:0.00,speechiness:0.05,liveness:0.08})">Nirvana</button>
-  <button onclick="load({energy:0.10,danceability:0.22,valence:0.16,acousticness:0.98,speechiness:0.04,liveness:0.10})">Debussy</button>
-  <button onclick="load({energy:0.82,danceability:0.83,valence:0.96,acousticness:0.15,speechiness:0.19,liveness:0.19})">Pharrell - Happy</button>
-  <button onclick="load({energy:0.21,danceability:0.38,valence:0.19,acousticness:0.88,speechiness:0.03,liveness:0.10})">Bon Iver</button>
-  <button onclick="load({energy:0.44,danceability:0.75,valence:0.35,acousticness:0.10,speechiness:0.26,liveness:0.09})">Drake</button>
-  <button onclick="load({energy:0.68,danceability:0.55,valence:0.57,acousticness:0.12,speechiness:0.04,liveness:0.84})">Eagles (Live)</button>
+  <button onclick="load({energy:0.92,danceability:0.50,valence:0.44,acousticness:0.00,speechiness:0.05,liveness:0.08,instrumentalness:0.00,tempo:117,loudness:-4.7})">Nirvana</button>
+  <button onclick="load({energy:0.10,danceability:0.22,valence:0.16,acousticness:0.98,speechiness:0.04,liveness:0.10,instrumentalness:0.97,tempo:70,loudness:-26})">Debussy</button>
+  <button onclick="load({energy:0.82,danceability:0.83,valence:0.96,acousticness:0.15,speechiness:0.19,liveness:0.19,instrumentalness:0.01,tempo:160,loudness:-5.5})">Pharrell - Happy</button>
+  <button onclick="load({energy:0.21,danceability:0.38,valence:0.19,acousticness:0.88,speechiness:0.03,liveness:0.10,instrumentalness:0.00,tempo:96,loudness:-16})">Bon Iver</button>
+  <button onclick="load({energy:0.44,danceability:0.75,valence:0.35,acousticness:0.10,speechiness:0.26,liveness:0.09,instrumentalness:0.00,tempo:77,loudness:-9.5})">Drake</button>
+  <button onclick="load({energy:0.68,danceability:0.55,valence:0.57,acousticness:0.12,speechiness:0.04,liveness:0.84,instrumentalness:0.04,tempo:75,loudness:-8.0})">Eagles (Live)</button>
 </div>
 
 <div class="result">
@@ -124,24 +141,28 @@
   <div class="desc" id="desc"></div>
 </div>
 
+<canvas id="radar" width="260" height="260"></canvas>
+
 <div class="bars" id="bars"></div>
 
 <script>
-const KEYS = ['energy','danceability','valence','acousticness','speechiness','liveness'];
+const KEYS = ['energy','danceability','valence','acousticness','speechiness','liveness','instrumentalness','tempo','loudness'];
+const KEY_MIN = {energy:0,danceability:0,valence:0,acousticness:0,speechiness:0,liveness:0,instrumentalness:0,tempo:40,loudness:-60};
+const KEY_MAX = {energy:1,danceability:1,valence:1,acousticness:1,speechiness:1,liveness:1,instrumentalness:1,tempo:220,loudness:0};
 
 const CLUSTERS = [
   { name:'Party / Feel-Good',       desc:'Upbeat pop, danceable, positive energy',
-    c: {energy:0.72, danceability:0.76, valence:0.71, acousticness:0.13, speechiness:0.08, liveness:0.15} },
+    c: {energy:0.72, danceability:0.76, valence:0.71, acousticness:0.13, speechiness:0.08, liveness:0.15, instrumentalness:0.04, tempo:126, loudness:-5.5} },
   { name:'Sad Acoustic Ballads',    desc:'Low energy, highly acoustic, emotional',
-    c: {energy:0.28, danceability:0.44, valence:0.24, acousticness:0.70, speechiness:0.04, liveness:0.12} },
+    c: {energy:0.28, danceability:0.44, valence:0.24, acousticness:0.70, speechiness:0.04, liveness:0.12, instrumentalness:0.08, tempo:94,  loudness:-14.5} },
   { name:'Ambient / Instrumental',  desc:'No vocals, calm, classical or ambient',
-    c: {energy:0.36, danceability:0.39, valence:0.38, acousticness:0.32, speechiness:0.04, liveness:0.12} },
+    c: {energy:0.36, danceability:0.39, valence:0.38, acousticness:0.32, speechiness:0.04, liveness:0.12, instrumentalness:0.85, tempo:112, loudness:-14.0} },
   { name:'Chill Hip-Hop / R&B',     desc:'Moderate energy, strong beat, rap/R&B',
-    c: {energy:0.55, danceability:0.73, valence:0.49, acousticness:0.21, speechiness:0.20, liveness:0.14} },
+    c: {energy:0.55, danceability:0.73, valence:0.49, acousticness:0.21, speechiness:0.20, liveness:0.14, instrumentalness:0.09, tempo:106, loudness:-7.5} },
   { name:'Hype / Workout / Rock',   desc:'Very high energy, loud, fast-paced',
-    c: {energy:0.87, danceability:0.55, valence:0.51, acousticness:0.07, speechiness:0.06, liveness:0.19} },
+    c: {energy:0.87, danceability:0.55, valence:0.51, acousticness:0.07, speechiness:0.06, liveness:0.19, instrumentalness:0.06, tempo:136, loudness:-4.5} },
   { name:'Live Recordings',         desc:'Recorded in front of an audience',
-    c: {energy:0.66, danceability:0.55, valence:0.51, acousticness:0.26, speechiness:0.07, liveness:0.77} },
+    c: {energy:0.66, danceability:0.55, valence:0.51, acousticness:0.26, speechiness:0.07, liveness:0.77, instrumentalness:0.09, tempo:116, loudness:-8.5} },
 ];
 
 function getState() {
@@ -150,8 +171,10 @@ function getState() {
   return s;
 }
 
+function norm(k, v) { return (v - KEY_MIN[k]) / (KEY_MAX[k] - KEY_MIN[k]); }
+
 function dist(a, b) {
-  return Math.sqrt(KEYS.reduce((sum, k) => sum + (a[k]-b[k])**2, 0));
+  return Math.sqrt(KEYS.reduce((sum, k) => sum + (norm(k, a[k]) - norm(k, b[k]))**2, 0));
 }
 
 function classify(s) {
@@ -170,6 +193,7 @@ function update() {
 
   document.getElementById('name').textContent = top.name;
   document.getElementById('desc').textContent = top.desc;
+  drawRadar(s);
 
   const barsEl = document.getElementById('bars');
   barsEl.innerHTML = '';
@@ -200,10 +224,73 @@ function load(vals) {
 
 KEYS.forEach(k => {
   document.getElementById('s_'+k).addEventListener('input', e => {
-    document.getElementById('v_'+k).textContent = parseFloat(e.target.value).toFixed(2);
+    const v = parseFloat(e.target.value);
+    document.getElementById('v_'+k).textContent = k === 'tempo' ? Math.round(v) : v.toFixed(k === 'loudness' ? 1 : 2);
     update();
   });
 });
+
+function drawRadar(s) {
+  const canvas = document.getElementById('radar');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+  const R = 90;
+  const n = KEYS.length;
+
+  ctx.clearRect(0, 0, W, H);
+
+  function angle(i) { return (i / n) * 2 * Math.PI - Math.PI / 2; }
+  function pt(i, r) { return [cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i))]; }
+
+  // grid rings
+  ctx.strokeStyle = '#ccc';
+  ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1].forEach(frac => {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const [x, y] = pt(i, R * frac);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  });
+
+  // spokes
+  for (let i = 0; i < n; i++) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    const [x, y] = pt(i, R);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
+
+  // labels
+  const LABELS = { energy:'Energy', danceability:'Dance', valence:'Valence', acousticness:'Acoustic', speechiness:'Speech', liveness:'Liveness', instrumentalness:'Instrumental', tempo:'Tempo', loudness:'Loudness' };
+  ctx.fillStyle = '#444';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < n; i++) {
+    const [x, y] = pt(i, R + 18);
+    ctx.fillText(LABELS[KEYS[i]], x, y);
+  }
+
+  // filled polygon
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const k = KEYS[i];
+    const v = (s[k] - KEY_MIN[k]) / (KEY_MAX[k] - KEY_MIN[k]);
+    const [x, y] = pt(i, R * v);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fill();
+  ctx.strokeStyle = '#222';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
 
 update();
 </script>
