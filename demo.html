@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spotify Mood Classifier</title>
+<style>
+  body {
+    font-family: sans-serif;
+    max-width: 500px;
+    margin: 60px auto;
+    padding: 0 20px;
+    background: #fff;
+    color: #222;
+  }
+
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  p.sub { color: #666; font-size: 0.9rem; margin-bottom: 32px; }
+
+  .slider-row {
+    margin-bottom: 18px;
+  }
+
+  .slider-row label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+  }
+
+  .slider-row label span { color: #888; }
+
+  input[type=range] { width: 100%; }
+
+  .presets {
+    margin: 24px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .presets button {
+    font-size: 0.82rem;
+    padding: 5px 12px;
+    border: 1px solid #ccc;
+    background: #f5f5f5;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .presets button:hover { background: #e8e8e8; }
+
+  .result {
+    margin-top: 28px;
+    padding: 20px;
+    border: 2px solid #222;
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  .result .name { font-size: 1.3rem; font-weight: bold; margin: 0 0 4px; }
+  .result .desc { font-size: 0.85rem; color: #555; }
+
+  .bars { margin-top: 24px; }
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 7px;
+    font-size: 0.82rem;
+  }
+  .bar-row .blabel { width: 160px; flex-shrink: 0; }
+  .bar-bg { flex: 1; height: 8px; background: #eee; border-radius: 4px; }
+  .bar-fill { height: 100%; background: #333; border-radius: 4px; transition: width 0.3s; }
+  .bar-row .bpct { width: 30px; text-align: right; color: #888; }
+</style>
+</head>
+<body>
+
+<h1>Spotify Mood Classifier</h1>
+<p class="sub">Drag the sliders to describe a song — it'll predict which of the 6 mood clusters it falls into (same K-Means model trained on 1.2M tracks).</p>
+
+<div class="slider-row">
+  <label>Energy <span id="v_energy">0.57</span></label>
+  <input type="range" id="s_energy" min="0" max="1" step="0.01" value="0.57">
+</div>
+
+<div class="slider-row">
+  <label>Danceability <span id="v_danceability">0.56</span></label>
+  <input type="range" id="s_danceability" min="0" max="1" step="0.01" value="0.56">
+</div>
+
+<div class="slider-row">
+  <label>Valence (happiness) <span id="v_valence">0.46</span></label>
+  <input type="range" id="s_valence" min="0" max="1" step="0.01" value="0.46">
+</div>
+
+<div class="slider-row">
+  <label>Acousticness <span id="v_acousticness">0.33</span></label>
+  <input type="range" id="s_acousticness" min="0" max="1" step="0.01" value="0.33">
+</div>
+
+<div class="slider-row">
+  <label>Speechiness <span id="v_speechiness">0.09</span></label>
+  <input type="range" id="s_speechiness" min="0" max="1" step="0.01" value="0.09">
+</div>
+
+<div class="slider-row">
+  <label>Liveness <span id="v_liveness">0.20</span></label>
+  <input type="range" id="s_liveness" min="0" max="1" step="0.01" value="0.20">
+</div>
+
+<div class="presets">
+  <strong style="width:100%; font-size:0.82rem; color:#888;">Try a song:</strong>
+  <button onclick="load({energy:0.92,danceability:0.50,valence:0.44,acousticness:0.00,speechiness:0.05,liveness:0.08})">Nirvana</button>
+  <button onclick="load({energy:0.10,danceability:0.22,valence:0.16,acousticness:0.98,speechiness:0.04,liveness:0.10})">Debussy</button>
+  <button onclick="load({energy:0.82,danceability:0.83,valence:0.96,acousticness:0.15,speechiness:0.19,liveness:0.19})">Pharrell - Happy</button>
+  <button onclick="load({energy:0.21,danceability:0.38,valence:0.19,acousticness:0.88,speechiness:0.03,liveness:0.10})">Bon Iver</button>
+  <button onclick="load({energy:0.44,danceability:0.75,valence:0.35,acousticness:0.10,speechiness:0.26,liveness:0.09})">Drake</button>
+  <button onclick="load({energy:0.68,danceability:0.55,valence:0.57,acousticness:0.12,speechiness:0.04,liveness:0.84})">Eagles (Live)</button>
+</div>
+
+<div class="result">
+  <div class="name" id="name">—</div>
+  <div class="desc" id="desc"></div>
+</div>
+
+<div class="bars" id="bars"></div>
+
+<script>
+const KEYS = ['energy','danceability','valence','acousticness','speechiness','liveness'];
+
+const CLUSTERS = [
+  { name:'Party / Feel-Good',       desc:'Upbeat pop, danceable, positive energy',
+    c: {energy:0.72, danceability:0.76, valence:0.71, acousticness:0.13, speechiness:0.08, liveness:0.15} },
+  { name:'Sad Acoustic Ballads',    desc:'Low energy, highly acoustic, emotional',
+    c: {energy:0.28, danceability:0.44, valence:0.24, acousticness:0.70, speechiness:0.04, liveness:0.12} },
+  { name:'Ambient / Instrumental',  desc:'No vocals, calm, classical or ambient',
+    c: {energy:0.36, danceability:0.39, valence:0.38, acousticness:0.32, speechiness:0.04, liveness:0.12} },
+  { name:'Chill Hip-Hop / R&B',     desc:'Moderate energy, strong beat, rap/R&B',
+    c: {energy:0.55, danceability:0.73, valence:0.49, acousticness:0.21, speechiness:0.20, liveness:0.14} },
+  { name:'Hype / Workout / Rock',   desc:'Very high energy, loud, fast-paced',
+    c: {energy:0.87, danceability:0.55, valence:0.51, acousticness:0.07, speechiness:0.06, liveness:0.19} },
+  { name:'Live Recordings',         desc:'Recorded in front of an audience',
+    c: {energy:0.66, danceability:0.55, valence:0.51, acousticness:0.26, speechiness:0.07, liveness:0.77} },
+];
+
+function getState() {
+  const s = {};
+  KEYS.forEach(k => s[k] = parseFloat(document.getElementById('s_'+k).value));
+  return s;
+}
+
+function dist(a, b) {
+  return Math.sqrt(KEYS.reduce((sum, k) => sum + (a[k]-b[k])**2, 0));
+}
+
+function classify(s) {
+  const results = CLUSTERS.map(c => ({ ...c, d: dist(s, c.c) }));
+  results.sort((a, b) => a.d - b.d);
+  const scores = results.map(r => ({ ...r, score: Math.exp(-r.d * 2) }));
+  const total = scores.reduce((s, r) => s + r.score, 0);
+  scores.forEach(r => r.pct = r.score / total);
+  return scores;
+}
+
+function update() {
+  const s = getState();
+  const results = classify(s);
+  const top = results[0];
+
+  document.getElementById('name').textContent = top.name;
+  document.getElementById('desc').textContent = top.desc;
+
+  const barsEl = document.getElementById('bars');
+  barsEl.innerHTML = '';
+  // show in original cluster order
+  const sorted = [...results].sort((a, b) => CLUSTERS.indexOf(CLUSTERS.find(c=>c.name===a.name)) - CLUSTERS.indexOf(CLUSTERS.find(c=>c.name===b.name)));
+  results.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    const pct = (r.pct * 100).toFixed(0);
+    row.innerHTML = `
+      <div class="blabel">${r.name}</div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
+      <div class="bpct">${pct}%</div>
+    `;
+    barsEl.appendChild(row);
+  });
+}
+
+function load(vals) {
+  KEYS.forEach(k => {
+    if (vals[k] !== undefined) {
+      document.getElementById('s_'+k).value = vals[k];
+      document.getElementById('v_'+k).textContent = vals[k].toFixed(2);
+    }
+  });
+  update();
+}
+
+KEYS.forEach(k => {
+  document.getElementById('s_'+k).addEventListener('input', e => {
+    document.getElementById('v_'+k).textContent = parseFloat(e.target.value).toFixed(2);
+    update();
+  });
+});
+
+update();
+</script>
+</body>
+</html>
